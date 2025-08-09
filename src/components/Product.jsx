@@ -1,3 +1,5 @@
+import React from "react";
+
 function Product({ product, onDelete, onUpdateQuantity }) {
   const handleIncreaseQuantity = () => {
     onUpdateQuantity(product.id, product.quantity + 1);

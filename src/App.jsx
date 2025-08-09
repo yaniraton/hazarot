@@ -2,6 +2,19 @@ import { useState } from "react";
 import { jsPDF } from "jspdf";
 import { applyPlugin } from "jspdf-autotable";
 import Product from "./components/Product";
+import React from "react";
+import BarcodeScanner from "./components/BarcodeScanner";
+
+import "./fonts/NotoSansHebrew-normal";
+
+// Helper to reverse Hebrew text for jsPDF
+function reverseHebrew(str) {
+  // Only reverse if contains Hebrew (basic check)
+  if (/[\u0590-\u05FF]/.test(str)) {
+    return str.split("").reverse().join("");
+  }
+  return str;
+}
 
 function App() {
   const [products, setProducts] = useState([]);
@@ -10,6 +23,7 @@ function App() {
     name: "",
     quantity: "",
   });
+  const [showScanner, setShowScanner] = useState(false);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -54,20 +68,27 @@ function App() {
       applyPlugin(jsPDF);
       const doc = new jsPDF();
 
-      // Add title
+      // Add title (example in Hebrew)
+      doc.setFont("NotoSansHebrew", "normal");
       doc.setFontSize(20);
-      doc.text("Product List", 14, 22);
+      doc.text(reverseHebrew("רשימת מוצרים"), 200, 22, { align: "right" });
 
-      // Prepare table data
+      // Prepare table data (reverse Hebrew fields)
       const tableData = products.map((product) => [
-        product.barcode,
-        product.name,
+        reverseHebrew(product.barcode),
+        reverseHebrew(product.name),
         product.quantity.toString(),
       ]);
 
-      // Add table using autoTable - this should work after importing the plugin
+      // Add table using autoTable
       doc.autoTable({
-        head: [["Barcode", "Product Name", "Quantity"]],
+        head: [
+          [
+            reverseHebrew("ברקוד"),
+            reverseHebrew("שם מוצר"),
+            reverseHebrew("כמות"),
+          ],
+        ],
         body: tableData,
         startY: 30,
         styles: {
@@ -75,6 +96,8 @@ function App() {
           cellPadding: 3,
           lineColor: [0, 0, 0],
           lineWidth: 0.1,
+          font: "NotoSansHebrew",
+          halign: "right",
         },
         headStyles: {
           fillColor: [255, 255, 255],
@@ -82,10 +105,12 @@ function App() {
           fontStyle: "bold",
           lineColor: [0, 0, 0],
           lineWidth: 0.1,
+          halign: "right",
         },
         bodyStyles: {
           fillColor: [255, 255, 255],
           textColor: [0, 0, 0],
+          halign: "right",
         },
         margin: { top: 30 },
       });
@@ -102,24 +127,27 @@ function App() {
     }
   };
 
+  const handleScanBarcode = (code) => {
+    setFormData((prev) => ({ ...prev, barcode: code }));
+    setShowScanner(false);
+  };
+
   return (
-    <div className="h-screen bg-gray-50 flex flex-col">
+    <div className="h-screen bg-gray-50 flex flex-col" dir="rtl" lang="he">
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
         <div className="px-4 py-4">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-            Product Manager
+            מנהל מוצרים
           </h1>
-          <p className="text-gray-600 text-sm">
-            Add products and export to PDF
-          </p>
+          <p className="text-gray-600 text-sm">הוסיפו מוצרים וייצאו ל-PDF</p>
         </div>
       </header>
 
       {/* Add Product Section - Always Visible */}
       <div className="bg-white border-b border-gray-200 p-4 flex-shrink-0">
         <h2 className="text-lg font-semibold text-gray-800 mb-3">
-          Add New Product
+          הוספת מוצר חדש
         </h2>
         <form onSubmit={handleAddProduct} className="space-y-3">
           <div className="space-y-3">
@@ -128,25 +156,35 @@ function App() {
                 htmlFor="barcode"
                 className="block text-sm font-medium text-gray-700 mb-1"
               >
-                Barcode
+                ברקוד
               </label>
-              <input
-                type="text"
-                id="barcode"
-                name="barcode"
-                value={formData.barcode}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                placeholder="Enter barcode"
-                required
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  id="barcode"
+                  name="barcode"
+                  value={formData.barcode}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+                  placeholder="הכניסו ברקוד"
+                  required
+                />
+                <button
+                  type="button"
+                  className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                  onClick={() => setShowScanner(true)}
+                  title="סרקו ברקוד"
+                >
+                  📷
+                </button>
+              </div>
             </div>
             <div>
               <label
                 htmlFor="name"
                 className="block text-sm font-medium text-gray-700 mb-1"
               >
-                Product Name
+                שם מוצר
               </label>
               <input
                 type="text"
@@ -155,7 +193,7 @@ function App() {
                 value={formData.name}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                placeholder="Enter product name"
+                placeholder="הכניסו שם מוצר"
                 required
               />
             </div>
@@ -164,7 +202,7 @@ function App() {
                 htmlFor="quantity"
                 className="block text-sm font-medium text-gray-700 mb-1"
               >
-                Quantity
+                כמות
               </label>
               <input
                 type="number"
@@ -173,7 +211,7 @@ function App() {
                 value={formData.quantity}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
-                placeholder="Enter quantity"
+                placeholder="הכניסו כמות"
                 min="1"
                 required
               />
@@ -183,16 +221,22 @@ function App() {
             type="submit"
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-md transition-colors duration-200 text-base"
           >
-            Add Product
+            הוסף מוצר
           </button>
         </form>
+        {showScanner && (
+          <BarcodeScanner
+            onScan={handleScanBarcode}
+            onClose={() => setShowScanner(false)}
+          />
+        )}
       </div>
 
       {/* Product List Section - Scrollable */}
       <div className="flex-1 bg-white flex flex-col min-h-0">
         <div className="p-4 border-b border-gray-200 flex-shrink-0">
           <h2 className="text-lg font-semibold text-gray-800">
-            Product List ({products.length} items)
+            רשימת מוצרים ({products.length} פריטים)
           </h2>
         </div>
 
@@ -200,9 +244,9 @@ function App() {
           <div className="flex-1 flex items-center justify-center p-4">
             <div className="text-center">
               <div className="text-gray-400 text-4xl mb-3">📦</div>
-              <p className="text-gray-500 text-base">No products added yet</p>
+              <p className="text-gray-500 text-base">לא נוספו מוצרים</p>
               <p className="text-gray-400 text-sm">
-                Add your first product above
+                הוסיפו את המוצר הראשון למעלה
               </p>
             </div>
           </div>
@@ -225,17 +269,17 @@ function App() {
               <table className="w-full">
                 <thead className="bg-gray-50 sticky top-0">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Barcode
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      ברקוד
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Product Name
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      שם מוצר
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Quantity
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      כמות
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      פעולות
                     </th>
                   </tr>
                 </thead>
@@ -267,8 +311,8 @@ function App() {
           }`}
         >
           {products.length === 0
-            ? "No Products to Export"
-            : `Export ${products.length} Products to PDF`}
+            ? "אין מוצרים לייצוא"
+            : `ייצוא ${products.length} מוצרים ל-PDF`}
         </button>
       </footer>
     </div>

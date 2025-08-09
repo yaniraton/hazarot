@@ -9,20 +9,20 @@ function Write-Section($msg) {
     Write-Host "`n==== $msg ====" -ForegroundColor Cyan
 }
 
-# 1. Commit and push source code to source branch
-Write-Section "Committing and pushing source code to source branch..."
+# 1. Commit and push source code to main branch
+Write-Section "Committing and pushing source code to main branch..."
 git add .
 if (-not (git diff --cached --quiet)) {
     git commit -m $Message
-    git push origin source
-    Write-Host "Source code pushed to source branch." -ForegroundColor Green
+    git push origin main
+    Write-Host "Source code pushed to main branch." -ForegroundColor Green
 } else {
     Write-Host "No changes to commit." -ForegroundColor Yellow
 }
 
 # 2. Pull latest changes (optional safety)
-Write-Section "Pulling latest changes from source..."
-git pull origin source
+Write-Section "Pulling latest changes from main..."
+git pull origin main
 
 # 3. Build the app
 Write-Section "Building the app..."

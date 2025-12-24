@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { jsPDF } from "jspdf";
 import { applyPlugin } from "jspdf-autotable";
 import Product from "./components/Product";
@@ -16,6 +16,31 @@ function reverseHebrew(str) {
   return str;
 }
 
+// Helper to get last 5 digits of barcode
+function getLastFiveDigits(barcode) {
+  const barcodeStr = String(barcode).trim();
+  return barcodeStr.slice(-5);
+}
+
+// localStorage helpers for export history
+function saveHistoryToStorage(history) {
+  try {
+    localStorage.setItem("exportHistory", JSON.stringify(history));
+  } catch (error) {
+    console.error("Error saving history to localStorage:", error);
+  }
+}
+
+function loadHistoryFromStorage() {
+  try {
+    const stored = localStorage.getItem("exportHistory");
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error("Error loading history from localStorage:", error);
+    return [];
+  }
+}
+
 function App() {
   const [products, setProducts] = useState([]);
   const [formData, setFormData] = useState({
@@ -24,6 +49,14 @@ function App() {
     quantity: "",
   });
   const [showScanner, setShowScanner] = useState(false);
+  const [exportHistory, setExportHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Load export history from localStorage on mount
+  useEffect(() => {
+    const history = loadHistoryFromStorage();
+    setExportHistory(history);
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -40,7 +73,7 @@ function App() {
         ...prev,
         {
           id: Date.now(),
-          barcode: formData.barcode,
+          barcode: getLastFiveDigits(formData.barcode),
           name: formData.name,
           quantity: parseInt(formData.quantity),
         },
@@ -120,7 +153,23 @@ function App() {
         .toISOString()
         .slice(0, 19)
         .replace(/:/g, "-");
-      doc.save(`product-list-${timestamp}.pdf`);
+      const filename = `product-list-${timestamp}.pdf`;
+      doc.save(filename);
+
+      // Save to export history
+      const pdfDataUrl = doc.output("dataurlstring");
+      const historyEntry = {
+        id: Date.now(),
+        timestamp: new Date().toISOString(),
+        productCount: products.length,
+        products: [...products],
+        pdfDataUrl: pdfDataUrl,
+        filename: filename,
+      };
+
+      const newHistory = [historyEntry, ...exportHistory];
+      setExportHistory(newHistory);
+      saveHistoryToStorage(newHistory);
     } catch (error) {
       console.error("Error generating PDF:", error);
       alert("Error generating PDF. Please try again.");
@@ -128,8 +177,33 @@ function App() {
   };
 
   const handleScanBarcode = (code) => {
-    setFormData((prev) => ({ ...prev, barcode: code }));
+    setFormData((prev) => ({ ...prev, barcode: getLastFiveDigits(code) }));
     setShowScanner(false);
+  };
+
+  const handleDownloadFromHistory = (historyEntry) => {
+    try {
+      const link = document.createElement("a");
+      link.href = historyEntry.pdfDataUrl;
+      link.download = historyEntry.filename;
+      link.click();
+    } catch (error) {
+      console.error("Error downloading PDF from history:", error);
+      alert("Error downloading PDF. Please try again.");
+    }
+  };
+
+  const handleDeleteHistoryEntry = (id) => {
+    const newHistory = exportHistory.filter((entry) => entry.id !== id);
+    setExportHistory(newHistory);
+    saveHistoryToStorage(newHistory);
+  };
+
+  const handleClearAllHistory = () => {
+    if (window.confirm("האם אתם בטוחים שברצונכם למחוק את כל ההיסטוריה?")) {
+      setExportHistory([]);
+      saveHistoryToStorage([]);
+    }
   };
 
   return (
@@ -298,6 +372,68 @@ function App() {
           </div>
         )}
       </div>
+
+      {/* Export History Section */}
+      {exportHistory.length > 0 && (
+        <div className="bg-white border-t border-gray-200 flex-shrink-0">
+          <div className="p-4">
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className="w-full flex items-center justify-between text-lg font-semibold text-gray-800 hover:text-gray-600"
+            >
+              <span>היסטוריית ייצוא ({exportHistory.length})</span>
+              <span className="text-2xl">{showHistory ? "▼" : "◀"}</span>
+            </button>
+            
+            {showHistory && (
+              <div className="mt-4 space-y-3 max-h-60 overflow-y-auto">
+                {exportHistory.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="border border-gray-200 rounded-lg p-3 bg-gray-50"
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900">
+                          {new Date(entry.timestamp).toLocaleString("he-IL", {
+                            year: "numeric",
+                            month: "2-digit",
+                            day: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          {entry.productCount} מוצרים
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteHistoryEntry(entry.id)}
+                        className="text-red-600 hover:text-red-800 text-sm px-2"
+                        title="מחיקה"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => handleDownloadFromHistory(entry)}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded"
+                    >
+                      הורדה מחדש
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={handleClearAllHistory}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white text-sm py-2 rounded mt-2"
+                >
+                  מחיקת כל ההיסטוריה
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Footer with Export Button */}
       <footer className="bg-white border-t border-gray-200 p-4 flex-shrink-0">
